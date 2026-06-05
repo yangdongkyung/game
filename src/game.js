@@ -28,10 +28,18 @@ const world = { width: 960, height: 620 };
 const relay = { x: world.width / 2, y: world.height / 2, radius: 50 };
 
 const difficultySettings = {
-  chill: { time: 72, hazards: 4, cores: 6, speed: 0.86, multiplier: 0.9 },
-  standard: { time: 60, hazards: 6, cores: 7, speed: 1, multiplier: 1 },
-  chaos: { time: 52, hazards: 8, cores: 8, speed: 1.18, multiplier: 1.25 }
+  chill: { time: 72, hazards: 7, cores: 6, speed: 0.86, multiplier: 0.9 },
+  standard: { time: 60, hazards: 9, cores: 7, speed: 1, multiplier: 1 },
+  chaos: { time: 52, hazards: 11, cores: 8, speed: 1.18, multiplier: 1.25 }
 };
+
+const boostStages = [
+  { speed: 1, body: "#f7f7f2", canopy: "#28c7b7", accent: "#f5b942", engine: "#f5b942", length: 20, wing: 12, trail: 0 },
+  { speed: 1.14, body: "#f5b942", canopy: "#111317", accent: "#28c7b7", engine: "#76d05c", length: 22, wing: 14, trail: 1 },
+  { speed: 1.3, body: "#76d05c", canopy: "#111317", accent: "#f7f7f2", engine: "#28c7b7", length: 24, wing: 16, trail: 2 },
+  { speed: 1.48, body: "#28c7b7", canopy: "#111317", accent: "#f5b942", engine: "#ff6b4a", length: 26, wing: 18, trail: 3 },
+  { speed: 1.7, body: "#ff6b4a", canopy: "#f7f7f2", accent: "#28c7b7", engine: "#f5b942", length: 29, wing: 20, trail: 4 }
+];
 
 const keys = new Set();
 const touchDirs = new Set();
@@ -66,8 +74,8 @@ const game = {
   score: 0,
   time: difficultySettings.standard.time,
   charge: 0,
-  combo: 1,
-  maxCombo: 1,
+  boostStage: 1,
+  maxBoostStage: 1,
   delivered: 0,
   lastScore: 0
 };
@@ -97,7 +105,7 @@ function updateHud() {
   els.score.textContent = Math.round(game.score).toLocaleString();
   els.time.textContent = Math.max(0, game.time).toFixed(1);
   els.charge.textContent = String(game.charge);
-  els.combo.textContent = `x${game.combo}`;
+  els.combo.textContent = `Lv ${game.boostStage}/5`;
   els.submitScore.disabled = game.lastScore <= 0 || game.state !== "gameover" || submitLocked;
   els.pauseButton.disabled = game.state !== "running" && game.state !== "paused";
 }
@@ -146,8 +154,8 @@ function resetGame() {
   game.score = 0;
   game.time = settings.time;
   game.charge = 0;
-  game.combo = 1;
-  game.maxCombo = 1;
+  game.boostStage = 1;
+  game.maxBoostStage = 1;
   game.delivered = 0;
   game.lastScore = 0;
   submitLocked = false;
@@ -198,11 +206,12 @@ function pauseGame() {
   }
 }
 
-function gameOver() {
+function gameOver(kicker = "Relay dark", title = "Run complete", burstColor = "#f5b942") {
+  if (game.state === "gameover") return;
   game.state = "gameover";
   game.lastScore = Math.round(game.score);
-  showOverlay("Relay dark", "Run complete", `Score: ${game.lastScore.toLocaleString()}`, "Play again");
-  burst(player.x, player.y, "#f5b942", 24);
+  showOverlay(kicker, title, `Score: ${game.lastScore.toLocaleString()} / Boost Lv ${game.boostStage}`, "Play again");
+  burst(player.x, player.y, burstColor, 30);
   updateHud();
 }
 
@@ -217,26 +226,23 @@ function collectCore(index) {
 function deliverCharge() {
   if (game.charge === 0) return;
   const settings = difficultySettings[difficulty];
-  const gain = game.charge * 110 * game.combo * settings.multiplier;
+  const gain = game.charge * (105 + game.boostStage * 35) * settings.multiplier;
   game.score += gain;
   game.delivered += game.charge;
   game.time += Math.min(4.5, game.charge * 1.1);
   game.charge = 0;
-  game.combo = clamp(game.combo + 1, 1, 99);
-  game.maxCombo = Math.max(game.maxCombo, game.combo);
-  burst(relay.x, relay.y, "#28c7b7", 28);
+  game.boostStage = clamp(game.boostStage + 1, 1, 5);
+  game.maxBoostStage = Math.max(game.maxBoostStage, game.boostStage);
+  burst(relay.x, relay.y, boostStages[game.boostStage - 1].engine, 28 + game.boostStage * 5);
 }
 
 function takeHit(hazard) {
-  if (player.invulnerable > 0) return;
-  player.invulnerable = 1.25;
-  game.time -= 3.2;
-  game.score = Math.max(0, game.score - 90);
+  if (game.state !== "running") return;
   game.charge = 0;
-  game.combo = 1;
   player.vx += (player.x - hazard.x) * 4;
   player.vy += (player.y - hazard.y) * 4;
-  burst(player.x, player.y, "#ff6b4a", 24);
+  burst(hazard.x, hazard.y, "#ff6b4a", 18);
+  gameOver("Impact", "Ship destroyed", "#ff6b4a");
 }
 
 function burst(x, y, color, count) {
@@ -279,9 +285,9 @@ function update(dt) {
   }
 
   const move = getMovementVector();
-  const payloadDrag = 1 - game.charge * 0.045;
-  const targetSpeed = 292 * payloadDrag;
-  const acceleration = move.active ? 14 : 7;
+  const boost = boostStages[game.boostStage - 1];
+  const targetSpeed = 292 * boost.speed;
+  const acceleration = move.active ? 13 + game.boostStage * 1.6 : 7 + game.boostStage * 0.6;
   player.vx += (move.x * targetSpeed - player.vx) * Math.min(1, dt * acceleration);
   player.vy += (move.y * targetSpeed - player.vy) * Math.min(1, dt * acceleration);
   player.x = clamp(player.x + player.vx * dt, player.radius + 8, world.width - player.radius - 8);
@@ -450,26 +456,70 @@ function drawPlayer() {
   const blink = player.invulnerable > 0 && Math.floor(performance.now() / 90) % 2 === 0;
   if (blink) return;
 
+  const stage = boostStages[game.boostStage - 1];
+  const stageIndex = game.boostStage - 1;
+
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.rotate(player.angle);
-  ctx.shadowColor = "#f5b942";
-  ctx.shadowBlur = 18;
-  ctx.fillStyle = "#f7f7f2";
+  ctx.shadowColor = stage.engine;
+  ctx.shadowBlur = 16 + game.boostStage * 4;
+
+  if (stage.trail > 0) {
+    ctx.globalAlpha = 0.18 + stage.trail * 0.08;
+    ctx.fillStyle = stage.engine;
+    for (let i = 0; i < stage.trail; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(-stage.length - i * 7, 0);
+      ctx.lineTo(-stage.length - 14 - i * 8, -5 - i);
+      ctx.lineTo(-stage.length - 14 - i * 8, 5 + i);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = stage.body;
   ctx.beginPath();
-  ctx.moveTo(20, 0);
-  ctx.lineTo(-14, -12);
-  ctx.lineTo(-8, 0);
-  ctx.lineTo(-14, 12);
+  ctx.moveTo(stage.length, 0);
+  ctx.lineTo(-stage.length * 0.62, -stage.wing);
+  ctx.lineTo(-stage.length * 0.28, 0);
+  ctx.lineTo(-stage.length * 0.62, stage.wing);
   ctx.closePath();
   ctx.fill();
+
   ctx.shadowBlur = 0;
-  ctx.fillStyle = "#28c7b7";
-  ctx.fillRect(-8, -4, 12, 8);
+  ctx.fillStyle = stage.canopy;
+  ctx.beginPath();
+  ctx.ellipse(2, 0, 7 + stageIndex, 4.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = stage.accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-stage.length * 0.28, -stage.wing * 0.52);
+  ctx.lineTo(stage.length * 0.46, 0);
+  ctx.lineTo(-stage.length * 0.28, stage.wing * 0.52);
+  ctx.stroke();
+
+  if (game.boostStage >= 3) {
+    ctx.fillStyle = stage.accent;
+    ctx.fillRect(-stage.length * 0.72, -stage.wing - 3, 10 + stageIndex * 2, 4);
+    ctx.fillRect(-stage.length * 0.72, stage.wing - 1, 10 + stageIndex * 2, 4);
+  }
+
+  if (game.boostStage === 5) {
+    ctx.strokeStyle = "#f7f7f2";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, stage.length * 0.92, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   ctx.fillStyle = "#f5b942";
   for (let i = 0; i < game.charge; i += 1) {
     ctx.beginPath();
-    ctx.arc(-18 - i * 6, 0, 2.5, 0, Math.PI * 2);
+    ctx.arc(-stage.length - 5 - i * 6, 0, 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -516,7 +566,7 @@ async function submitScore() {
       name: els.pilotName.value,
       score: game.lastScore,
       difficulty,
-      maxCombo: game.maxCombo,
+      maxCombo: game.maxBoostStage,
       delivered: game.delivered
     });
     els.submitScore.textContent = "Saved";
