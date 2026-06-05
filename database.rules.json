@@ -1,0 +1,35 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "scores": {
+      ".read": true,
+      ".indexOn": ["score"],
+      "$scoreId": {
+        ".write": "!data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['name', 'score', 'difficulty', 'maxCombo', 'delivered', 'createdAt'])",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 18"
+        },
+        "score": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999999"
+        },
+        "difficulty": {
+          ".validate": "newData.isString() && (newData.val() == 'chill' || newData.val() == 'standard' || newData.val() == 'chaos')"
+        },
+        "maxCombo": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99"
+        },
+        "delivered": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber() && newData.val() <= now && newData.val() > now - 300000"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

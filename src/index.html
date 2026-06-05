@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111317">
+    <title>Flux Relay</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="play-section" aria-label="Flux Relay game">
+        <header class="topbar">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <div>
+              <h1>Flux Relay</h1>
+              <p>Keep the core lit.</p>
+            </div>
+          </div>
+          <div class="hud" aria-live="polite">
+            <div class="metric">
+              <span>Score</span>
+              <strong id="score">0</strong>
+            </div>
+            <div class="metric">
+              <span>Time</span>
+              <strong id="time">60.0</strong>
+            </div>
+            <div class="metric">
+              <span>Charge</span>
+              <strong id="charge">0</strong>
+            </div>
+            <div class="metric">
+              <span>Combo</span>
+              <strong id="combo">x1</strong>
+            </div>
+          </div>
+        </header>
+
+        <div class="canvas-shell">
+          <canvas id="gameCanvas" width="960" height="620" aria-label="Game arena"></canvas>
+          <div id="overlay" class="overlay is-active">
+            <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+              <span id="overlayKicker" class="kicker">Relay idle</span>
+              <h2 id="overlayTitle">Ready</h2>
+              <p id="overlayMeta">Best local run: 0</p>
+              <button id="overlayStart" class="primary-button" type="button">Start</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <div class="action-bar" aria-label="Game actions">
+            <button id="startButton" class="primary-button" type="button">Start</button>
+            <button id="pauseButton" class="icon-button" type="button" aria-label="Pause">
+              <span aria-hidden="true">II</span>
+            </button>
+            <button id="resetButton" class="icon-button" type="button" aria-label="Reset">
+              <span aria-hidden="true">R</span>
+            </button>
+          </div>
+          <div class="dpad" aria-label="Touch movement controls">
+            <button data-dir="up" aria-label="Move up" type="button">&uarr;</button>
+            <button data-dir="left" aria-label="Move left" type="button">&larr;</button>
+            <button data-dir="down" aria-label="Move down" type="button">&darr;</button>
+            <button data-dir="right" aria-label="Move right" type="button">&rarr;</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-panel" aria-label="Score panel">
+        <section class="panel-block">
+          <h2>Pilot</h2>
+          <label class="field-label" for="pilotName">Name</label>
+          <input id="pilotName" maxlength="18" autocomplete="nickname" value="Pilot" spellcheck="false">
+        </section>
+
+        <section class="panel-block">
+          <h2>Mode</h2>
+          <div class="segmented" role="group" aria-label="Difficulty">
+            <button type="button" data-difficulty="chill">Chill</button>
+            <button type="button" data-difficulty="standard" class="is-selected">Standard</button>
+            <button type="button" data-difficulty="chaos">Chaos</button>
+          </div>
+        </section>
+
+        <section class="panel-block">
+          <div class="panel-heading">
+            <h2>Leaderboard</h2>
+            <span id="leaderboardStatus">Local</span>
+          </div>
+          <ol id="leaderboardList" class="leaderboard"></ol>
+          <button id="submitScore" class="secondary-button" type="button" disabled>Submit score</button>
+        </section>
+      </aside>
+    </main>
+
+    <script src="./runtime-config.js"></script>
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>

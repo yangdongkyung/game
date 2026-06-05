@@ -12,6 +12,7 @@ const firebaseConfig = {
   apiKey: env("VITE_FIREBASE_API_KEY"),
   authDomain: env("VITE_FIREBASE_AUTH_DOMAIN"),
   projectId: env("VITE_FIREBASE_PROJECT_ID"),
+  databaseURL: env("VITE_FIREBASE_DATABASE_URL"),
   storageBucket: env("VITE_FIREBASE_STORAGE_BUCKET"),
   messagingSenderId: env("VITE_FIREBASE_MESSAGING_SENDER_ID"),
   appId: env("VITE_FIREBASE_APP_ID"),
@@ -19,7 +20,7 @@ const firebaseConfig = {
 };
 
 const runtimeConfig = `window.__FIREBASE_CONFIG__ = ${JSON.stringify(firebaseConfig, null, 2)};
-window.__GAME_COLLECTION__ = ${JSON.stringify(env("VITE_FIREBASE_COLLECTION") || "scores")};
+window.__GAME_SCORES_PATH__ = ${JSON.stringify(env("VITE_FIREBASE_SCORES_PATH") || "scores")};
 `;
 
 await rm(distDir, { recursive: true, force: true });
