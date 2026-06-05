@@ -7,6 +7,7 @@ const cleanEntry = (entry) => ({
   name: String(entry.name || "Pilot").trim().slice(0, 18) || "Pilot",
   score: Math.max(0, Math.min(999999999, Math.round(Number(entry.score) || 0))),
   difficulty: ["chill", "standard", "chaos", "hell"].includes(entry.difficulty) ? entry.difficulty : "standard",
+  playerMode: ["solo", "duo"].includes(entry.playerMode) ? entry.playerMode : "solo",
   maxBoostLevel: Math.max(1, Math.min(999, Math.round(Number(entry.maxBoostLevel ?? entry.maxBoostStage ?? entry.maxCombo) || 1))),
   delivered: Math.max(0, Math.min(9999, Math.round(Number(entry.delivered) || 0)))
 });
@@ -141,7 +142,7 @@ export class Leaderboard {
 
       rank.textContent = String(index + 1).padStart(2, "0");
       name.textContent = score.name;
-      meta.textContent = `${score.score.toLocaleString()} / ${score.difficulty} / Lv ${score.maxBoostLevel}`;
+      meta.textContent = `${score.score.toLocaleString()} / ${score.difficulty} / ${score.playerMode === "duo" ? "2P" : "1P"} / Lv ${score.maxBoostLevel}`;
 
       item.append(rank, name, meta);
       this.listEl.append(item);

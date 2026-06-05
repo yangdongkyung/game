@@ -10,6 +10,10 @@ npm run dev
 
 Open `http://localhost:5173`.
 
+## Controls
+
+In 1P mode, move with WASD or arrow keys. In 2P mode, P1 uses WASD and P2 uses arrow keys.
+
 ## Build
 
 ```bash
@@ -46,7 +50,7 @@ VITE_FIREBASE_SCORES_PATH=scores
 
 The game still works without Firebase config. In that mode it stores leaderboard entries in the browser with `localStorage`.
 
-Scores are stored under `scores` with `name`, `score`, `difficulty`, `maxBoostLevel`, `delivered`, and `createdAt`.
+Scores are stored under `scores` with `name`, `score`, `difficulty`, `playerMode`, `maxBoostLevel`, `delivered`, and `createdAt`.
 
 ## Realtime Database rules
 

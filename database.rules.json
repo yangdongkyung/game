@@ -7,7 +7,7 @@
       ".indexOn": ["score"],
       "$scoreId": {
         ".write": "!data.exists() && newData.exists()",
-        ".validate": "newData.hasChildren(['name', 'score', 'difficulty', 'maxBoostLevel', 'delivered', 'createdAt'])",
+        ".validate": "newData.hasChildren(['name', 'score', 'difficulty', 'playerMode', 'maxBoostLevel', 'delivered', 'createdAt'])",
         "name": {
           ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 18"
         },
@@ -16,6 +16,9 @@
         },
         "difficulty": {
           ".validate": "newData.isString() && (newData.val() == 'chill' || newData.val() == 'standard' || newData.val() == 'chaos' || newData.val() == 'hell')"
+        },
+        "playerMode": {
+          ".validate": "newData.isString() && (newData.val() == 'solo' || newData.val() == 'duo')"
         },
         "maxBoostLevel": {
           ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 999"

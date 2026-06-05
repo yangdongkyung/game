@@ -20,6 +20,7 @@ const els = {
   pilotName: document.querySelector("#pilotName"),
   leaderboardList: document.querySelector("#leaderboardList"),
   leaderboardStatus: document.querySelector("#leaderboardStatus"),
+  playerModeButtons: [...document.querySelectorAll("[data-player-mode]")],
   difficultyButtons: [...document.querySelectorAll("[data-difficulty]")],
   dpadButtons: [...document.querySelectorAll("[data-dir]")]
 };
@@ -70,17 +71,38 @@ let cores = [];
 let hazards = [];
 let animationId = 0;
 let difficulty = "standard";
+let playerMode = "solo";
 let lastTime = 0;
 let submitLocked = false;
 
 const player = {
+  id: "p1",
+  label: "P1",
   x: relay.x,
   y: relay.y + 118,
   vx: 0,
   vy: 0,
   radius: 15,
   angle: -Math.PI / 2,
-  invulnerable: 0
+  invulnerable: 0,
+  accent: "#f5b942",
+  secondary: "#28c7b7",
+  active: true
+};
+
+const playerTwo = {
+  id: "p2",
+  label: "P2",
+  x: relay.x,
+  y: relay.y - 118,
+  vx: 0,
+  vy: 0,
+  radius: 15,
+  angle: Math.PI / 2,
+  invulnerable: 0,
+  accent: "#76d05c",
+  secondary: "#ff6b4a",
+  active: false
 };
 
 const game = {
@@ -110,6 +132,10 @@ function visualLevel() {
 
 function currentBoostStage() {
   return boostStages[visualLevel() - 1];
+}
+
+function activePlayers() {
+  return playerMode === "duo" ? [player, playerTwo] : [player];
 }
 
 function hazardSpeedScaleForLevel(level) {
@@ -155,8 +181,8 @@ function spawnCore() {
       hue: Math.random() > 0.5 ? "#f5b942" : "#76d05c"
     };
     const awayFromRelay = distance(core, relay) > 150;
-    const awayFromPlayer = distance(core, player) > 130;
-    if (awayFromRelay && awayFromPlayer) break;
+    const awayFromPlayers = activePlayers().every((pilot) => distance(core, pilot) > 130);
+    if (awayFromRelay && awayFromPlayers) break;
   }
   return core;
 }
@@ -174,7 +200,7 @@ function spawnHazard(index, settings) {
     spin: randomRange(0, Math.PI * 2)
   };
 
-  if (distance(hazard, player) < 180) {
+  if (activePlayers().some((pilot) => distance(hazard, pilot) < 180)) {
     hazard.x = world.width - hazard.x;
     hazard.y = world.height - hazard.y;
   }
@@ -233,6 +259,15 @@ function resetGame() {
   player.vy = 0;
   player.angle = -Math.PI / 2;
   player.invulnerable = 0;
+  player.active = true;
+
+  playerTwo.x = relay.x;
+  playerTwo.y = relay.y - 118;
+  playerTwo.vx = 0;
+  playerTwo.vy = 0;
+  playerTwo.angle = Math.PI / 2;
+  playerTwo.invulnerable = 0;
+  playerTwo.active = playerMode === "duo";
 
   cores = Array.from({ length: settings.cores }, spawnCore);
   hazards = Array.from({ length: targetHazardCount(1) }, (_, index) => spawnHazard(index, settings));
@@ -273,24 +308,25 @@ function pauseGame() {
   }
 }
 
-function gameOver(kicker = "Relay dark", title = "Run complete", burstColor = "#f5b942") {
+function gameOver(kicker = "Relay dark", title = "Run complete", burstColor = "#f5b942", source = player) {
   if (game.state === "gameover") return;
   game.state = "gameover";
   game.lastScore = Math.round(game.score);
   showOverlay(kicker, title, `Score: ${game.lastScore.toLocaleString()} / Boost Lv ${game.boostLevel}`, "Play again");
-  burst(player.x, player.y, burstColor, 30);
+  burst(source.x, source.y, burstColor, 30);
   updateHud();
 }
 
-function collectCore(index) {
+function collectCore(index, pilot) {
   const core = cores[index];
   game.charge = clamp(game.charge + 1, 0, 5);
   game.score += 12 * difficultySettings[difficulty].multiplier;
+  burst(pilot.x, pilot.y, pilot.accent, 5);
   burst(core.x, core.y, core.hue, 14);
   cores[index] = spawnCore();
 }
 
-function deliverCharge() {
+function deliverCharge(pilot) {
   if (game.charge === 0) return;
   const settings = difficultySettings[difficulty];
   const previousLevel = game.boostLevel;
@@ -302,16 +338,17 @@ function deliverCharge() {
   game.boostLevel += 1;
   game.maxBoostLevel = Math.max(game.maxBoostLevel, game.boostLevel);
   syncHazardsForLevel(previousLevel);
+  burst(pilot.x, pilot.y, pilot.secondary, 14);
   burst(relay.x, relay.y, currentBoostStage().engine, 28 + visualLevel() * 3);
 }
 
-function takeHit(hazard) {
+function takeHit(hazard, pilot) {
   if (game.state !== "running") return;
   game.charge = 0;
-  player.vx += (player.x - hazard.x) * 4;
-  player.vy += (player.y - hazard.y) * 4;
+  pilot.vx += (pilot.x - hazard.x) * 4;
+  pilot.vy += (pilot.y - hazard.y) * 4;
   burst(hazard.x, hazard.y, "#ff6b4a", 18);
-  gameOver("Impact", "Ship destroyed", "#ff6b4a");
+  gameOver("Impact", `${pilot.label} destroyed`, "#ff6b4a", pilot);
 }
 
 function burst(x, y, color, count) {
@@ -331,17 +368,44 @@ function burst(x, y, color, count) {
   }
 }
 
-function getMovementVector() {
-  const left = keys.has("ArrowLeft") || keys.has("KeyA") || touchDirs.has("left");
-  const right = keys.has("ArrowRight") || keys.has("KeyD") || touchDirs.has("right");
-  const up = keys.has("ArrowUp") || keys.has("KeyW") || touchDirs.has("up");
-  const down = keys.has("ArrowDown") || keys.has("KeyS") || touchDirs.has("down");
+function getMovementVector(pilot) {
+  const arrowsEnabled = playerMode === "solo" || pilot.id === "p2";
+  const wasdEnabled = pilot.id === "p1";
+  const touchEnabled = pilot.id === "p1";
+  const left = (arrowsEnabled && keys.has("ArrowLeft")) || (wasdEnabled && keys.has("KeyA")) || (touchEnabled && touchDirs.has("left"));
+  const right = (arrowsEnabled && keys.has("ArrowRight")) || (wasdEnabled && keys.has("KeyD")) || (touchEnabled && touchDirs.has("right"));
+  const up = (arrowsEnabled && keys.has("ArrowUp")) || (wasdEnabled && keys.has("KeyW")) || (touchEnabled && touchDirs.has("up"));
+  const down = (arrowsEnabled && keys.has("ArrowDown")) || (wasdEnabled && keys.has("KeyS")) || (touchEnabled && touchDirs.has("down"));
   let x = Number(right) - Number(left);
   let y = Number(down) - Number(up);
   const length = Math.hypot(x, y) || 1;
   x /= length;
   y /= length;
   return { x, y, active: left || right || up || down };
+}
+
+function updatePlayer(pilot, dt) {
+  const move = getMovementVector(pilot);
+  const boost = currentBoostStage();
+  const targetSpeed = 292 * boost.speed;
+  const acceleration = move.active ? 13 + visualLevel() * 0.65 : 7 + visualLevel() * 0.28;
+  pilot.vx += (move.x * targetSpeed - pilot.vx) * Math.min(1, dt * acceleration);
+  pilot.vy += (move.y * targetSpeed - pilot.vy) * Math.min(1, dt * acceleration);
+  pilot.x = clamp(pilot.x + pilot.vx * dt, pilot.radius + 8, world.width - pilot.radius - 8);
+  pilot.y = clamp(pilot.y + pilot.vy * dt, pilot.radius + 8, world.height - pilot.radius - 8);
+  pilot.invulnerable = Math.max(0, pilot.invulnerable - dt);
+
+  if (Math.hypot(pilot.vx, pilot.vy) > 8) {
+    pilot.angle = Math.atan2(pilot.vy, pilot.vx);
+  }
+
+  cores.forEach((core, index) => {
+    if (distance(pilot, core) < pilot.radius + core.radius) collectCore(index, pilot);
+  });
+
+  if (distance(pilot, relay) < pilot.radius + relay.radius) {
+    deliverCharge(pilot);
+  }
 }
 
 function update(dt) {
@@ -353,28 +417,11 @@ function update(dt) {
     return;
   }
 
-  const move = getMovementVector();
-  const boost = currentBoostStage();
-  const targetSpeed = 292 * boost.speed;
-  const acceleration = move.active ? 13 + visualLevel() * 0.65 : 7 + visualLevel() * 0.28;
-  player.vx += (move.x * targetSpeed - player.vx) * Math.min(1, dt * acceleration);
-  player.vy += (move.y * targetSpeed - player.vy) * Math.min(1, dt * acceleration);
-  player.x = clamp(player.x + player.vx * dt, player.radius + 8, world.width - player.radius - 8);
-  player.y = clamp(player.y + player.vy * dt, player.radius + 8, world.height - player.radius - 8);
-  player.invulnerable = Math.max(0, player.invulnerable - dt);
-
-  if (Math.hypot(player.vx, player.vy) > 8) {
-    player.angle = Math.atan2(player.vy, player.vx);
-  }
-
-  cores.forEach((core, index) => {
+  cores.forEach((core) => {
     core.spin += dt * 2.8;
-    if (distance(player, core) < player.radius + core.radius) collectCore(index);
   });
 
-  if (distance(player, relay) < player.radius + relay.radius) {
-    deliverCharge();
-  }
+  activePlayers().forEach((pilot) => updatePlayer(pilot, dt));
 
   hazards.forEach((hazard) => {
     hazard.x += hazard.vx * dt;
@@ -397,7 +444,9 @@ function update(dt) {
       hazard.vy = (hazard.vy / hazardSpeed) * maxHazardSpeed;
     }
 
-    if (distance(player, hazard) < player.radius + hazard.radius) takeHit(hazard);
+    activePlayers().forEach((pilot) => {
+      if (distance(pilot, hazard) < pilot.radius + hazard.radius) takeHit(hazard, pilot);
+    });
   });
 
   particles.forEach((particle) => {
@@ -528,24 +577,28 @@ function drawHazard(hazard) {
   ctx.restore();
 }
 
-function drawPlayer() {
-  const blink = player.invulnerable > 0 && Math.floor(performance.now() / 90) % 2 === 0;
+function drawPlayer(pilot) {
+  const blink = pilot.invulnerable > 0 && Math.floor(performance.now() / 90) % 2 === 0;
   if (blink) return;
 
   const stage = currentBoostStage();
   const level = visualLevel();
   const stageIndex = level - 1;
   const overdrive = Math.max(0, game.boostLevel - MAX_VISUAL_LEVEL);
+  const bodyColor = pilot.id === "p2" ? pilot.accent : stage.body;
+  const canopyColor = pilot.id === "p2" ? pilot.secondary : stage.canopy;
+  const accentColor = pilot.id === "p2" ? stage.body : stage.accent;
+  const engineColor = pilot.id === "p2" ? pilot.secondary : stage.engine;
 
   ctx.save();
-  ctx.translate(player.x, player.y);
-  ctx.rotate(player.angle);
-  ctx.shadowColor = stage.engine;
+  ctx.translate(pilot.x, pilot.y);
+  ctx.rotate(pilot.angle);
+  ctx.shadowColor = engineColor;
   ctx.shadowBlur = 16 + level * 2.2 + Math.min(overdrive * 2, 18);
 
   if (stage.trail > 0) {
     ctx.globalAlpha = 0.18 + stage.trail * 0.08;
-    ctx.fillStyle = stage.engine;
+    ctx.fillStyle = engineColor;
     for (let i = 0; i < stage.trail; i += 1) {
       ctx.beginPath();
       ctx.moveTo(-stage.length - i * 7, 0);
@@ -557,7 +610,7 @@ function drawPlayer() {
     ctx.globalAlpha = 1;
   }
 
-  ctx.fillStyle = stage.body;
+  ctx.fillStyle = bodyColor;
   ctx.beginPath();
   ctx.moveTo(stage.length, 0);
   ctx.lineTo(-stage.length * 0.62, -stage.wing);
@@ -567,12 +620,12 @@ function drawPlayer() {
   ctx.fill();
 
   ctx.shadowBlur = 0;
-  ctx.fillStyle = stage.canopy;
+  ctx.fillStyle = canopyColor;
   ctx.beginPath();
   ctx.ellipse(2, 0, 7 + stageIndex, 4.4, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = stage.accent;
+  ctx.strokeStyle = accentColor;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(-stage.length * 0.28, -stage.wing * 0.52);
@@ -581,7 +634,7 @@ function drawPlayer() {
   ctx.stroke();
 
   if (game.boostLevel >= 3) {
-    ctx.fillStyle = stage.accent;
+    ctx.fillStyle = accentColor;
     ctx.fillRect(-stage.length * 0.72, -stage.wing - 3, 10 + stageIndex * 2, 4);
     ctx.fillRect(-stage.length * 0.72, stage.wing - 1, 10 + stageIndex * 2, 4);
   }
@@ -594,7 +647,7 @@ function drawPlayer() {
     ctx.stroke();
   }
 
-  ctx.fillStyle = "#f5b942";
+  ctx.fillStyle = pilot.accent;
   for (let i = 0; i < game.charge; i += 1) {
     ctx.beginPath();
     ctx.arc(-stage.length - 5 - i * 6, 0, 2.5, 0, Math.PI * 2);
@@ -620,7 +673,7 @@ function draw(time) {
   cores.forEach(drawCore);
   hazards.forEach(drawHazard);
   drawParticles();
-  drawPlayer();
+  activePlayers().forEach(drawPlayer);
 }
 
 function loop(time) {
@@ -644,6 +697,7 @@ async function submitScore() {
       name: els.pilotName.value,
       score: game.lastScore,
       difficulty,
+      playerMode,
       maxBoostLevel: game.maxBoostLevel,
       delivered: game.delivered
     });
@@ -667,6 +721,16 @@ function selectDifficulty(nextDifficulty) {
   resetGame();
 }
 
+function selectPlayerMode(nextMode) {
+  playerMode = nextMode;
+  els.playerModeButtons.forEach((button) => {
+    const selected = button.dataset.playerMode === playerMode;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  resetGame();
+}
+
 function bindEvents() {
   els.startButton.addEventListener("click", startGame);
   els.overlayStart.addEventListener("click", () => {
@@ -679,6 +743,10 @@ function bindEvents() {
 
   els.difficultyButtons.forEach((button) => {
     button.addEventListener("click", () => selectDifficulty(button.dataset.difficulty));
+  });
+
+  els.playerModeButtons.forEach((button) => {
+    button.addEventListener("click", () => selectPlayerMode(button.dataset.playerMode));
   });
 
   window.addEventListener("keydown", (event) => {
