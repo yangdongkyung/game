@@ -7,7 +7,7 @@ const cleanEntry = (entry) => ({
   name: String(entry.name || "Pilot").trim().slice(0, 18) || "Pilot",
   score: Math.max(0, Math.min(999999, Math.round(Number(entry.score) || 0))),
   difficulty: ["chill", "standard", "chaos"].includes(entry.difficulty) ? entry.difficulty : "standard",
-  maxCombo: Math.max(1, Math.min(99, Math.round(Number(entry.maxCombo) || 1))),
+  maxBoostStage: Math.max(1, Math.min(5, Math.round(Number(entry.maxBoostStage ?? entry.maxCombo) || 1))),
   delivered: Math.max(0, Math.min(999, Math.round(Number(entry.delivered) || 0)))
 });
 

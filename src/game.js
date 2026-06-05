@@ -566,7 +566,7 @@ async function submitScore() {
       name: els.pilotName.value,
       score: game.lastScore,
       difficulty,
-      maxCombo: game.maxBoostStage,
+      maxBoostStage: game.maxBoostStage,
       delivered: game.delivered
     });
     els.submitScore.textContent = "Saved";
