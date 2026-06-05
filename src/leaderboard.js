@@ -5,10 +5,10 @@ const requiredConfigKeys = ["apiKey", "projectId", "appId", "databaseURL"];
 
 const cleanEntry = (entry) => ({
   name: String(entry.name || "Pilot").trim().slice(0, 18) || "Pilot",
-  score: Math.max(0, Math.min(999999, Math.round(Number(entry.score) || 0))),
-  difficulty: ["chill", "standard", "chaos"].includes(entry.difficulty) ? entry.difficulty : "standard",
-  maxBoostStage: Math.max(1, Math.min(5, Math.round(Number(entry.maxBoostStage ?? entry.maxCombo) || 1))),
-  delivered: Math.max(0, Math.min(999, Math.round(Number(entry.delivered) || 0)))
+  score: Math.max(0, Math.min(999999999, Math.round(Number(entry.score) || 0))),
+  difficulty: ["chill", "standard", "chaos", "hell"].includes(entry.difficulty) ? entry.difficulty : "standard",
+  maxBoostLevel: Math.max(1, Math.min(999, Math.round(Number(entry.maxBoostLevel ?? entry.maxBoostStage ?? entry.maxCombo) || 1))),
+  delivered: Math.max(0, Math.min(9999, Math.round(Number(entry.delivered) || 0)))
 });
 
 const hasFirebaseConfig = (config) =>
@@ -141,7 +141,7 @@ export class Leaderboard {
 
       rank.textContent = String(index + 1).padStart(2, "0");
       name.textContent = score.name;
-      meta.textContent = `${score.score.toLocaleString()} / ${score.difficulty}`;
+      meta.textContent = `${score.score.toLocaleString()} / ${score.difficulty} / Lv ${score.maxBoostLevel}`;
 
       item.append(rank, name, meta);
       this.listEl.append(item);

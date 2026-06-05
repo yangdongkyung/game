@@ -7,21 +7,21 @@
       ".indexOn": ["score"],
       "$scoreId": {
         ".write": "!data.exists() && newData.exists()",
-        ".validate": "newData.hasChildren(['name', 'score', 'difficulty', 'maxBoostStage', 'delivered', 'createdAt'])",
+        ".validate": "newData.hasChildren(['name', 'score', 'difficulty', 'maxBoostLevel', 'delivered', 'createdAt'])",
         "name": {
           ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 18"
         },
         "score": {
-          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999999"
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999999999"
         },
         "difficulty": {
-          ".validate": "newData.isString() && (newData.val() == 'chill' || newData.val() == 'standard' || newData.val() == 'chaos')"
+          ".validate": "newData.isString() && (newData.val() == 'chill' || newData.val() == 'standard' || newData.val() == 'chaos' || newData.val() == 'hell')"
         },
-        "maxBoostStage": {
-          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5"
+        "maxBoostLevel": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 999"
         },
         "delivered": {
-          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 999"
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9999"
         },
         "createdAt": {
           ".validate": "newData.isNumber() && newData.val() <= now && newData.val() > now - 300000"

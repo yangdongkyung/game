@@ -28,18 +28,32 @@ const world = { width: 960, height: 620 };
 const relay = { x: world.width / 2, y: world.height / 2, radius: 50 };
 
 const difficultySettings = {
-  chill: { time: 72, hazards: 7, cores: 6, speed: 0.86, multiplier: 0.9 },
-  standard: { time: 60, hazards: 9, cores: 7, speed: 1, multiplier: 1 },
-  chaos: { time: 52, hazards: 11, cores: 8, speed: 1.18, multiplier: 1.25 }
+  chill: { time: 72, hazards: 4, cores: 6, speed: 0.86, multiplier: 0.9 },
+  standard: { time: 60, hazards: 6, cores: 7, speed: 1, multiplier: 1 },
+  chaos: { time: 52, hazards: 8, cores: 8, speed: 1.18, multiplier: 1.25 },
+  hell: { time: 45, hazards: 11, cores: 8, speed: 1.36, multiplier: 1.55 }
 };
 
-const boostStages = [
-  { speed: 1, body: "#f7f7f2", canopy: "#28c7b7", accent: "#f5b942", engine: "#f5b942", length: 20, wing: 12, trail: 0 },
-  { speed: 1.14, body: "#f5b942", canopy: "#111317", accent: "#28c7b7", engine: "#76d05c", length: 22, wing: 14, trail: 1 },
-  { speed: 1.3, body: "#76d05c", canopy: "#111317", accent: "#f7f7f2", engine: "#28c7b7", length: 24, wing: 16, trail: 2 },
-  { speed: 1.48, body: "#28c7b7", canopy: "#111317", accent: "#f5b942", engine: "#ff6b4a", length: 26, wing: 18, trail: 3 },
-  { speed: 1.7, body: "#ff6b4a", canopy: "#f7f7f2", accent: "#28c7b7", engine: "#f5b942", length: 29, wing: 20, trail: 4 }
+const MAX_VISUAL_LEVEL = 15;
+const shipPalette = [
+  { body: "#f7f7f2", canopy: "#28c7b7", accent: "#f5b942", engine: "#f5b942" },
+  { body: "#f5b942", canopy: "#111317", accent: "#28c7b7", engine: "#76d05c" },
+  { body: "#76d05c", canopy: "#111317", accent: "#f7f7f2", engine: "#28c7b7" },
+  { body: "#28c7b7", canopy: "#111317", accent: "#f5b942", engine: "#ff6b4a" },
+  { body: "#ff6b4a", canopy: "#f7f7f2", accent: "#28c7b7", engine: "#f5b942" }
 ];
+
+const boostStages = Array.from({ length: MAX_VISUAL_LEVEL }, (_, index) => {
+  const level = index + 1;
+  const colors = shipPalette[index % shipPalette.length];
+  return {
+    ...colors,
+    speed: 1 + index * 0.055,
+    length: 20 + index * 0.9,
+    wing: 12 + index * 0.65,
+    trail: Math.min(8, Math.floor(index / 2))
+  };
+});
 
 const keys = new Set();
 const touchDirs = new Set();
@@ -74,8 +88,9 @@ const game = {
   score: 0,
   time: difficultySettings.standard.time,
   charge: 0,
-  boostStage: 1,
-  maxBoostStage: 1,
+  boostLevel: 1,
+  maxBoostLevel: 1,
+  hazardSpeedScale: 1,
   delivered: 0,
   lastScore: 0
 };
@@ -88,6 +103,25 @@ const leaderboard = new Leaderboard({
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const randomRange = (min, max) => Math.random() * (max - min) + min;
+
+function visualLevel() {
+  return clamp(game.boostLevel, 1, MAX_VISUAL_LEVEL);
+}
+
+function currentBoostStage() {
+  return boostStages[visualLevel() - 1];
+}
+
+function hazardSpeedScaleForLevel(level) {
+  return 1 + Math.max(0, level - MAX_VISUAL_LEVEL) * 0.075;
+}
+
+function targetHazardCount(level = game.boostLevel) {
+  const baseHazards = difficultySettings[difficulty].hazards;
+  const preOverdriveHazards = Math.floor(Math.min(level, MAX_VISUAL_LEVEL) / 2);
+  const overdriveHazards = Math.max(0, level - MAX_VISUAL_LEVEL);
+  return baseHazards + preOverdriveHazards + overdriveHazards;
+}
 
 function showOverlay(kicker, title, meta, buttonText = "Start") {
   els.overlayKicker.textContent = kicker;
@@ -105,8 +139,8 @@ function updateHud() {
   els.score.textContent = Math.round(game.score).toLocaleString();
   els.time.textContent = Math.max(0, game.time).toFixed(1);
   els.charge.textContent = String(game.charge);
-  els.combo.textContent = `Lv ${game.boostStage}/5`;
-  els.submitScore.disabled = game.lastScore <= 0 || game.state !== "gameover" || submitLocked;
+  els.combo.textContent = `Lv ${game.boostLevel}`;
+  els.submitScore.disabled = game.state !== "gameover" || submitLocked;
   els.pauseButton.disabled = game.state !== "running" && game.state !== "paused";
 }
 
@@ -129,7 +163,7 @@ function spawnCore() {
 
 function spawnHazard(index, settings) {
   const edge = index % 4;
-  const speed = randomRange(78, 126) * settings.speed;
+  const speed = randomRange(78, 126) * settings.speed * game.hazardSpeedScale;
   const angle = randomRange(0, Math.PI * 2);
   const hazard = {
     x: edge === 0 ? 82 : edge === 1 ? world.width - 82 : randomRange(90, world.width - 90),
@@ -148,17 +182,50 @@ function spawnHazard(index, settings) {
   return hazard;
 }
 
+function addHazard(settings) {
+  const hazard = spawnHazard(hazards.length, settings);
+  hazards.push(hazard);
+  burst(hazard.x, hazard.y, "#ff6b4a", 8);
+}
+
+function syncHazardsForLevel(previousLevel) {
+  const settings = difficultySettings[difficulty];
+  const previousScale = game.hazardSpeedScale;
+  const nextScale = hazardSpeedScaleForLevel(game.boostLevel);
+
+  game.hazardSpeedScale = nextScale;
+
+  if (game.boostLevel > MAX_VISUAL_LEVEL && previousScale > 0) {
+    const speedRatio = nextScale / previousScale;
+    hazards.forEach((hazard) => {
+      hazard.vx *= speedRatio;
+      hazard.vy *= speedRatio;
+    });
+  }
+
+  const target = targetHazardCount();
+  while (hazards.length < target) {
+    addHazard(settings);
+  }
+
+  if (target > targetHazardCount(previousLevel)) {
+    burst(relay.x, relay.y, "#ff6b4a", 10);
+  }
+}
+
 function resetGame() {
   const settings = difficultySettings[difficulty];
   game.state = "idle";
   game.score = 0;
   game.time = settings.time;
   game.charge = 0;
-  game.boostStage = 1;
-  game.maxBoostStage = 1;
+  game.boostLevel = 1;
+  game.maxBoostLevel = 1;
+  game.hazardSpeedScale = hazardSpeedScaleForLevel(1);
   game.delivered = 0;
   game.lastScore = 0;
   submitLocked = false;
+  els.submitScore.textContent = "Submit score";
 
   player.x = relay.x;
   player.y = relay.y + 118;
@@ -168,7 +235,7 @@ function resetGame() {
   player.invulnerable = 0;
 
   cores = Array.from({ length: settings.cores }, spawnCore);
-  hazards = Array.from({ length: settings.hazards }, (_, index) => spawnHazard(index, settings));
+  hazards = Array.from({ length: targetHazardCount(1) }, (_, index) => spawnHazard(index, settings));
   particles.length = 0;
 
   updateHud();
@@ -210,7 +277,7 @@ function gameOver(kicker = "Relay dark", title = "Run complete", burstColor = "#
   if (game.state === "gameover") return;
   game.state = "gameover";
   game.lastScore = Math.round(game.score);
-  showOverlay(kicker, title, `Score: ${game.lastScore.toLocaleString()} / Boost Lv ${game.boostStage}`, "Play again");
+  showOverlay(kicker, title, `Score: ${game.lastScore.toLocaleString()} / Boost Lv ${game.boostLevel}`, "Play again");
   burst(player.x, player.y, burstColor, 30);
   updateHud();
 }
@@ -226,14 +293,16 @@ function collectCore(index) {
 function deliverCharge() {
   if (game.charge === 0) return;
   const settings = difficultySettings[difficulty];
-  const gain = game.charge * (105 + game.boostStage * 35) * settings.multiplier;
+  const previousLevel = game.boostLevel;
+  const gain = game.charge * (105 + visualLevel() * 26 + Math.max(0, game.boostLevel - MAX_VISUAL_LEVEL) * 12) * settings.multiplier;
   game.score += gain;
   game.delivered += game.charge;
   game.time += Math.min(4.5, game.charge * 1.1);
   game.charge = 0;
-  game.boostStage = clamp(game.boostStage + 1, 1, 5);
-  game.maxBoostStage = Math.max(game.maxBoostStage, game.boostStage);
-  burst(relay.x, relay.y, boostStages[game.boostStage - 1].engine, 28 + game.boostStage * 5);
+  game.boostLevel += 1;
+  game.maxBoostLevel = Math.max(game.maxBoostLevel, game.boostLevel);
+  syncHazardsForLevel(previousLevel);
+  burst(relay.x, relay.y, currentBoostStage().engine, 28 + visualLevel() * 3);
 }
 
 function takeHit(hazard) {
@@ -285,9 +354,9 @@ function update(dt) {
   }
 
   const move = getMovementVector();
-  const boost = boostStages[game.boostStage - 1];
+  const boost = currentBoostStage();
   const targetSpeed = 292 * boost.speed;
-  const acceleration = move.active ? 13 + game.boostStage * 1.6 : 7 + game.boostStage * 0.6;
+  const acceleration = move.active ? 13 + visualLevel() * 0.65 : 7 + visualLevel() * 0.28;
   player.vx += (move.x * targetSpeed - player.vx) * Math.min(1, dt * acceleration);
   player.vy += (move.y * targetSpeed - player.vy) * Math.min(1, dt * acceleration);
   player.x = clamp(player.x + player.vx * dt, player.radius + 8, world.width - player.radius - 8);
@@ -317,9 +386,16 @@ function update(dt) {
 
     const dx = relay.x - hazard.x;
     const dy = relay.y - hazard.y;
-    const pull = 10 * settings.speed;
+    const pull = 10 * settings.speed * game.hazardSpeedScale;
     hazard.vx += (dx / Math.max(120, Math.hypot(dx, dy))) * pull * dt;
     hazard.vy += (dy / Math.max(120, Math.hypot(dx, dy))) * pull * dt;
+
+    const maxHazardSpeed = (158 + Math.max(0, game.boostLevel - MAX_VISUAL_LEVEL) * 12) * settings.speed * game.hazardSpeedScale;
+    const hazardSpeed = Math.hypot(hazard.vx, hazard.vy);
+    if (hazardSpeed > maxHazardSpeed) {
+      hazard.vx = (hazard.vx / hazardSpeed) * maxHazardSpeed;
+      hazard.vy = (hazard.vy / hazardSpeed) * maxHazardSpeed;
+    }
 
     if (distance(player, hazard) < player.radius + hazard.radius) takeHit(hazard);
   });
@@ -456,14 +532,16 @@ function drawPlayer() {
   const blink = player.invulnerable > 0 && Math.floor(performance.now() / 90) % 2 === 0;
   if (blink) return;
 
-  const stage = boostStages[game.boostStage - 1];
-  const stageIndex = game.boostStage - 1;
+  const stage = currentBoostStage();
+  const level = visualLevel();
+  const stageIndex = level - 1;
+  const overdrive = Math.max(0, game.boostLevel - MAX_VISUAL_LEVEL);
 
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.rotate(player.angle);
   ctx.shadowColor = stage.engine;
-  ctx.shadowBlur = 16 + game.boostStage * 4;
+  ctx.shadowBlur = 16 + level * 2.2 + Math.min(overdrive * 2, 18);
 
   if (stage.trail > 0) {
     ctx.globalAlpha = 0.18 + stage.trail * 0.08;
@@ -502,17 +580,17 @@ function drawPlayer() {
   ctx.lineTo(-stage.length * 0.28, stage.wing * 0.52);
   ctx.stroke();
 
-  if (game.boostStage >= 3) {
+  if (game.boostLevel >= 3) {
     ctx.fillStyle = stage.accent;
     ctx.fillRect(-stage.length * 0.72, -stage.wing - 3, 10 + stageIndex * 2, 4);
     ctx.fillRect(-stage.length * 0.72, stage.wing - 1, 10 + stageIndex * 2, 4);
   }
 
-  if (game.boostStage === 5) {
+  if (game.boostLevel >= MAX_VISUAL_LEVEL) {
     ctx.strokeStyle = "#f7f7f2";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(0, 0, stage.length * 0.92, 0, Math.PI * 2);
+    ctx.arc(0, 0, stage.length * 0.92 + Math.min(overdrive, 12), 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -555,7 +633,7 @@ function loop(time) {
 }
 
 async function submitScore() {
-  if (game.lastScore <= 0 || submitLocked) return;
+  if (game.state !== "gameover" || submitLocked) return;
 
   submitLocked = true;
   updateHud();
@@ -566,7 +644,7 @@ async function submitScore() {
       name: els.pilotName.value,
       score: game.lastScore,
       difficulty,
-      maxBoostStage: game.maxBoostStage,
+      maxBoostLevel: game.maxBoostLevel,
       delivered: game.delivered
     });
     els.submitScore.textContent = "Saved";

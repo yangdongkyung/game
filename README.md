@@ -46,9 +46,11 @@ VITE_FIREBASE_SCORES_PATH=scores
 
 The game still works without Firebase config. In that mode it stores leaderboard entries in the browser with `localStorage`.
 
+Scores are stored under `scores` with `name`, `score`, `difficulty`, `maxBoostLevel`, `delivered`, and `createdAt`.
+
 ## Realtime Database rules
 
-Use `database.rules.json` in the Firebase console Realtime Database rules tab. It allows public reads for `scores`, validates new score entries, and blocks updates, deletes, and every other path. For a serious production leaderboard, add authentication, rate limits, or a server-side verification flow.
+Use `database.rules.json` in the Firebase console Realtime Database rules tab. It allows public reads for `scores`, validates new score entries, supports `chill`, `standard`, `chaos`, and `hell`, and blocks updates, deletes, and every other path. For a serious production leaderboard, add authentication, rate limits, or a server-side verification flow.
 
 ## Project structure
 
